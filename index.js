@@ -72,7 +72,7 @@ async function save(file, data) {
     const json = JSON.stringify(data);
     if (useDB && db) {
         try {
-            await db.execute('INSERT INTO store (id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = ?', [key, json, json]);
+            await db.execute('INSERT INTO data_store (id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = ?', [key, json, json]);
             return;
         } catch (e) { console.log('Save error:', e.message); }
     }
