@@ -376,7 +376,7 @@ app.post('/change-password', auth, async (req, res) => {
 
 // Admin routes
 function adminAuth(req, res, next) {
-    if (!req.session.admin) return res.redirect('/admin/login');
+    if (!req.session || !req.session.admin) return res.redirect('/admin/login');
     next();
 }
 
