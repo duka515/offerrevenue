@@ -60,13 +60,20 @@ async function load(file) {
     if (useDB && db) {
         try {
             const [rows] = await db.execute('SELECT data FROM data_store WHERE id = ?', [key]);
-            if (rows.length) return typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+            if (rows.length && rows[0].data) {
+                let data = rows[0].data;
+                if (typeof data === 'string') data = JSON.parse(data);
+                return Array.isArray(data) ? data : [];
+            }
             return [];
         } catch { return []; }
     }
     const p = path.join(DATA_DIR, file);
     if (!fs.existsSync(p)) return [];
-    try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return []; }
+    try { 
+        const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+        return Array.isArray(data) ? data : [];
+    } catch { return []; }
 }
 
 async function save(file, data) {
