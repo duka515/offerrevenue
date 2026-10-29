@@ -276,6 +276,11 @@ app.post('/signup', async (req, res) => {
     }
 });
 
+app.get('/debug-users', async (req, res) => {
+    const users = await load('users.json');
+    res.json({ count: users.length, emails: users.map(u => u.email) });
+});
+
 app.get('/logout', (req, res) => { 
     if (req.session) req.session.destroy(); 
     res.redirect('/'); 
