@@ -36,6 +36,7 @@ async function initDB() {
         console.log('Database connected');
     } catch (e) {
         console.log('Database error, using file storage:', e.message);
+        useDB = false;
     }
 }
 initDB();
@@ -521,5 +522,11 @@ app.get('/admin/logout', (req, res) => { req.session.admin = false; res.redirect
 app.get('/about', (req, res) => res.send(layout('About Us', `<h1>About Us</h1><div class="card"><h2>Who We Are</h2><p>OfferRevenue is a performance marketing platform connecting affiliates with high-converting offers.</p><h2>Our Mission</h2><p>To help affiliates maximize their revenue with exclusive offers, accurate tracking, and fair payouts.</p></div>`)));
 app.get('/terms', (req, res) => res.send(layout('Terms', `<h1>Terms of Service</h1><div class="card"><p>By using OfferRevenue, you agree to these terms.</p><h2>Payments</h2><p>Minimum payout is $200. First payout after 30 days, then biweekly via USDT TRC20.</p><h2>Prohibited</h2><p>No spam, fraud, or misleading traffic.</p></div>`)));
 app.get('/privacy', (req, res) => res.send(layout('Privacy', `<h1>Privacy Policy</h1><div class="card"><p>We collect account info, payment details, and usage data to provide our services. We do not sell your data.</p></div>`)));
+
+// Error handling
+app.use((err, req, res, next) => {
+    console.error('Error:', err.message);
+    res.status(500).send('Server error. Please try again.');
+});
 
 app.listen(PORT, () => console.log(`OfferRevenue running on port ${PORT}`));
