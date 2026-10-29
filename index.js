@@ -389,8 +389,9 @@ app.get('/admin/login', (req, res) => {
 });
 
 app.post('/admin/login', async (req, res) => {
-    const settings = loadSettings();
-    if (req.body.username === 'admin' && req.body.password === (settings.admin_pass || 'admin123')) {
+    const body = req.body || {};
+    const settings = await loadSettings();
+    if (body.username === 'admin' && body.password === (settings.admin_pass || 'admin123')) {
         req.session.admin = true;
         return res.redirect('/admin');
     }
