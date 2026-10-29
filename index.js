@@ -251,7 +251,10 @@ app.post('/signup', async (req, res) => {
     }
 });
 
-app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
+app.get('/logout', (req, res) => { 
+    if (req.session) req.session.destroy(); 
+    res.redirect('/'); 
+});
 
 // Auth middleware
 async function auth(req, res, next) {
@@ -532,17 +535,25 @@ app.post('/admin/add-stats', adminAuth, async (req, res) => {
     res.redirect('/admin');
 });
 
-app.get('/admin/logout', (req, res) => { req.session.admin = false; res.redirect('/'); });
+app.get('/admin/logout', (req, res) => { 
+    if (req.session) req.session.admin = false; 
+    res.redirect('/'); 
+});
 
 // Static pages
 app.get('/about', (req, res) => res.send(layout('About Us', `<h1>About Us</h1><div class="card"><h2>Who We Are</h2><p>OfferRevenue is a performance marketing platform connecting affiliates with high-converting offers.</p><h2>Our Mission</h2><p>To help affiliates maximize their revenue with exclusive offers, accurate tracking, and fair payouts.</p></div>`)));
 app.get('/terms', (req, res) => res.send(layout('Terms', `<h1>Terms of Service</h1><div class="card"><p>By using OfferRevenue, you agree to these terms.</p><h2>Payments</h2><p>Minimum payout is $200. First payout after 30 days, then biweekly via USDT TRC20.</p><h2>Prohibited</h2><p>No spam, fraud, or misleading traffic.</p></div>`)));
 app.get('/privacy', (req, res) => res.send(layout('Privacy', `<h1>Privacy Policy</h1><div class="card"><p>We collect account info, payment details, and usage data to provide our services. We do not sell your data.</p></div>`)));
 
-// Error handling
+// Error handling - catch all
 app.use((err, req, res, next) => {
-    console.error('Error:', err.message);
-    res.status(500).send('Server error. Please try again.');
+    console.error('Error:', err.message, err.stack);
+    res.status(500).send('<html><body style="font-family:sans-serif;text-align:center;padding:50px;"><h1>Server Error</h1><p>Please try again or contact support.</p><a href="/">Go Home</a></body></html>');
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).send('<html><body style="font-family:sans-serif;text-align:center;padding:50px;"><h1>Page Not Found</h1><a href="/">Go Home</a></body></html>');
 });
 
 app.listen(PORT, () => console.log(`OfferRevenue running on port ${PORT}`));
