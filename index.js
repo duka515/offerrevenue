@@ -193,7 +193,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-    if (req.session.user) return res.redirect('/dashboard');
+    if (req.session && req.session.user) return res.redirect('/dashboard');
     const err = req.query.error ? '<div style="color:var(--danger);margin-bottom:12px;text-align:center;">Invalid email or password</div>' : '';
     const content = `<div style="max-width:420px;margin:60px auto;text-align:center;">${logo.replace('40','80').replace('40','80')}<h2 style="margin:16px 0;">Login</h2>
         <form method="post" action="/login">${err}<input name="email" type="email" placeholder="Email" required style="margin:8px 0;"><div style="position:relative;"><input name="password" id="pass" type="password" placeholder="Password" required style="margin:8px 0;"><button type="button" onclick="togglePass()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-dim);">Show</button></div><label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-size:14px;"><input type="checkbox" name="remember" style="width:auto;"> Remember me</label><button class="btn" style="width:100%;">Login</button></form>
