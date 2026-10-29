@@ -72,7 +72,7 @@ async function save(file, data) {
 
 async function loadSettings() {
     const data = await load('settings.json');
-    if (!data || (Array.isArray(data) && !data.length)) return { admin_pass: 'admin123' };
+    if (!data || Array.isArray(data) || !data.admin_pass) return { admin_pass: 'admin123' };
     return data;
 }
 
