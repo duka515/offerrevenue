@@ -51,7 +51,7 @@ async function load(file) {
     const key = file.replace('.json', '');
     if (useDB && db) {
         try {
-            const [rows] = await db.execute('SELECT data FROM store WHERE id = ?', [key]);
+            const [rows] = await db.execute('SELECT data FROM data_store WHERE id = ?', [key]);
             if (rows.length && rows[0].data) {
                 const data = JSON.parse(rows[0].data);
                 return Array.isArray(data) ? data : [];
