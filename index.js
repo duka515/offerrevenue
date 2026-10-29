@@ -224,14 +224,19 @@ app.post('/login', async (req, res) => {
         const users = await load('users.json');
         const email = (req.body.email || '').toLowerCase().trim();
         const hashedInput = hashPass(req.body.password);
-        console.log('Login attempt:', email, 'Users count:', users.length);
-        const user = users.find(u => u.email.toLowerCase() === email && u.pass === hashedInput);
+        console.log('Login attempt:', email);
+        console.log('Users in DB:', users.length);
+        console.log('User emails:', users.map(u => u.email).join(', '));
+        const user = users.find(u => u.email.toLowerCase() === email);
         if (user) {
-            req.session.user = user;
-            req.session.save(() => {
-                res.redirect('/dashboard');
-            });
-            return;
+            console.log('User found, pass match:', user.pass === hashedInput);
+            if (user.pass === hashedInput) {
+                req.session.user = user;
+                req.session.save(() => {
+                    res.redirect('/dashboard');
+                });
+                return;
+            }
         }
         console.log('Login failed for:', email);
         res.redirect('/login?error=1');
