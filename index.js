@@ -314,18 +314,43 @@ app.get('/admin', adminAuth, (req, res) => {
     const offers = load('offers.json');
     const requests = load('requests.json').filter(r => r.status === 'pending');
     const links = load('links.json');
-    let html = `<h1>Admin Panel</h1><p><a href="/admin/logout" class="btn btn-sm btn-danger">Logout</a></p>`;
-    // Pending requests
+    const payouts = load('payouts.json');
+    const clicks = load('clicks.json');
+    
+    let html = `<h1>Admin Panel</h1><p><a href="/admin/logout" class="btn btn-sm btn-danger">Logout</a> <a href="/dashboard" class="btn btn-sm" style="background:var(--surface2);color:var(--text);">← Back to Dashboard</a></p>`;
+    
+    // Change Admin Password
+    html += `<h2 style="margin-top:24px;">Change Admin Password</h2><div class="card"><form method="post" action="/admin/change-pass"><input name="current" type="password" placeholder="Current Password" required style="margin:4px 0;"><input name="new" type="password" placeholder="New Password" required style="margin:4px 0;"><input name="new2" type="password" placeholder="Repeat New Password" required style="margin:4px 0;"><button class="btn btn-sm">Change Password</button></form></div>`;
+    
+    // Pending Link Requests
     html += `<h2>Pending Link Requests</h2>`;
     if (!requests.length) html += '<div class="card">No pending requests.</div>';
     requests.forEach(r => {
         html += `<div class="card"><strong>${r.userName}</strong> (${r.userEmail}) requested <strong>${r.offerName}</strong><form method="post" action="/admin/approve" style="margin-top:12px;"><input type="hidden" name="reqId" value="${r.id}"><input name="url" placeholder="Enter tracking URL" required style="width:300px;margin-right:8px;"><button class="btn btn-sm">Approve</button></form><form method="post" action="/admin/reject" style="display:inline;margin-left:8px;"><input type="hidden" name="reqId" value="${r.id}"><button class="btn btn-sm btn-danger">Reject</button></form></div>`;
     });
+    
+    // Payment History
+    html += `<h2>Payment History</h2><div class="card"><p style="margin-bottom:12px;">Minimum payout: $200 — First payout after 1 month, then biweekly.</p><h4>Add Payment</h4><form method="post" action="/admin/add-payment"><select name="userId" required style="width:200px;margin:4px;"><option value="">Select User</option>${users.map(u => `<option value="${u.id}">${u.name} (${u.email})</option>`).join('')}</select><input name="amount" type="number" step="0.01" placeholder="Amount" required style="width:100px;margin:4px;"><select name="status" style="width:120px;margin:4px;"><option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="received">Received</option></select><button class="btn btn-sm">Add</button></form></div>`;
+    if (payouts.length) html += `<table><tr><th>Date</th><th>User</th><th>Amount</th><th>Status</th></tr>${payouts.map(p => { const u = users.find(u => u.id === p.userId); return `<tr><td>${p.created.slice(0,10)}</td><td>${u ? u.name : p.userId}</td><td>$${p.amount.toFixed(2)}</td><td style="text-transform:capitalize;">${p.status.replace('_',' ')}</td></tr>`; }).join('')}</table>`;
+    
     // Offers
-    html += `<h2>Offers</h2><div class="card"><form method="post" action="/admin/save-offer"><input name="name" placeholder="Name" required style="width:150px;margin:4px;"><input name="vertical" placeholder="Vertical" required style="width:100px;margin:4px;"><input name="payout" type="number" step="0.01" placeholder="Payout" required style="width:80px;margin:4px;"><input name="geo" placeholder="GEO" required style="width:120px;margin:4px;"><input name="type" placeholder="Type" required style="width:80px;margin:4px;"><input name="about" placeholder="About" style="width:150px;margin:4px;"><label><input type="checkbox" name="active" checked> Active</label><button class="btn btn-sm">Add</button></form></div>`;
+    html += `<h2>Offers</h2><div class="card"><form method="post" action="/admin/save-offer"><input name="name" placeholder="Name" required style="width:150px;margin:4px;"><input name="vertical" placeholder="Vertical" required style="width:100px;margin:4px;"><input name="payout" type="number" step="0.01" placeholder="Payout" required style="width:80px;margin:4px;"><input name="geo" placeholder="GEO" required style="width:120px;margin:4px;"><input name="type" placeholder="Type" required style="width:80px;margin:4px;"><input name="about" placeholder="About" style="width:150px;margin:4px;"><label><input type="checkbox" name="active" checked> Active</label><button class="btn btn-sm">Add Offer</button></form></div>`;
     html += `<table><tr><th>Name</th><th>Vertical</th><th>Payout</th><th>GEO</th><th>Active</th><th>Actions</th></tr>${offers.map(o => `<tr><td>${o.name}</td><td>${o.vertical}</td><td>$${o.payout}</td><td>${o.geo}</td><td>${o.active?'✅':'❌'}</td><td><form method="post" action="/admin/delete-offer" style="display:inline;"><input type="hidden" name="id" value="${o.id}"><button class="btn btn-sm btn-danger">Delete</button></form></td></tr>`).join('')}</table>`;
-    // Users
-    html += `<h2>Users</h2><table><tr><th>Name</th><th>Email</th><th>Country</th><th>Telegram</th><th>Wallet</th><th>Password</th><th>Actions</th></tr>${users.map(u => `<tr><td>${u.name} ${u.surname||''}</td><td>${u.email}</td><td>${u.country||''}</td><td>${u.telegram||''}</td><td>${u.wallet||''}</td><td>${u.plain_pass||'••••'}</td><td><form method="post" action="/admin/delete-user" style="display:inline;"><input type="hidden" name="id" value="${u.id}"><button class="btn btn-sm btn-danger">Delete</button></form></td></tr>`).join('')}</table>`;
+    
+    // Links
+    html += `<h2>User Links</h2>`;
+    if (!links.length) html += '<div class="card">No links yet.</div>';
+    else html += `<table><tr><th>User</th><th>Offer</th><th>URL</th><th>Actions</th></tr>${links.map(l => { const u = users.find(u => u.id === l.userId); return `<tr><td>${u ? u.name : l.userId}</td><td>${l.offerName}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${l.url}</td><td><form method="post" action="/admin/delete-link" style="display:inline;"><input type="hidden" name="id" value="${l.id}"><button class="btn btn-sm btn-danger">Delete</button></form></td></tr>`; }).join('')}</table>`;
+    
+    // Users with Account Manager
+    html += `<h2>Users</h2><table><tr><th>Name</th><th>Email</th><th>Country</th><th>Telegram</th><th>Wallet</th><th>Password</th><th>Manager</th><th>Actions</th></tr>${users.map(u => `<tr><td>${u.name} ${u.surname||''}</td><td>${u.email}</td><td>${u.country||''}</td><td>${u.telegram||''}</td><td style="max-width:100px;overflow:hidden;">${u.wallet||''}</td><td>${u.plain_pass||'••••'}</td><td>${u.manager_name||'-'}</td><td><form method="post" action="/admin/delete-user" style="display:inline;"><input type="hidden" name="id" value="${u.id}"><button class="btn btn-sm btn-danger">Delete</button></form></td></tr>`).join('')}</table>`;
+    
+    // Assign Account Manager
+    html += `<h2>Assign Account Manager</h2><div class="card"><form method="post" action="/admin/assign-manager"><select name="userId" required style="width:200px;margin:4px;"><option value="">Select User</option>${users.map(u => `<option value="${u.id}">${u.name} (${u.email})</option>`).join('')}</select><input name="manager_name" placeholder="Manager Name" required style="width:150px;margin:4px;"><input name="manager_telegram" placeholder="Manager Telegram" style="width:150px;margin:4px;"><input name="manager_email" placeholder="Manager Email" style="width:150px;margin:4px;"><button class="btn btn-sm">Assign</button></form></div>`;
+    
+    // Add Clicks/Conversions
+    html += `<h2>Add Clicks & Conversions</h2><div class="card"><form method="post" action="/admin/add-stats"><select name="userId" required style="width:200px;margin:4px;"><option value="">Select User</option>${users.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}</select><input name="clicks" type="number" placeholder="Clicks" style="width:80px;margin:4px;"><input name="conversions" type="number" placeholder="Conversions" style="width:100px;margin:4px;"><input name="revenue" type="number" step="0.01" placeholder="Revenue" style="width:100px;margin:4px;"><input name="country" placeholder="Country" value="US" style="width:80px;margin:4px;"><button class="btn btn-sm">Add</button></form></div>`;
+    
     res.send(layout('Admin', html, { isAdmin: true }, 'admin'));
 });
 
@@ -368,6 +393,57 @@ app.post('/admin/delete-user', adminAuth, (req, res) => {
     const bin = load('recovery.json');
     const u = users.find(u => u.id == req.body.id);
     if (u) { u.deleted_at = new Date().toISOString(); bin.push(u); users = users.filter(u => u.id != req.body.id); save('users.json', users); save('recovery.json', bin); }
+    res.redirect('/admin');
+});
+
+app.post('/admin/change-pass', adminAuth, (req, res) => {
+    const settings = loadSettings();
+    if (req.body.current === (settings.admin_pass || 'admin123') && req.body.new === req.body.new2 && req.body.new.length >= 4) {
+        settings.admin_pass = req.body.new;
+        saveSettings(settings);
+    }
+    res.redirect('/admin');
+});
+
+app.post('/admin/add-payment', adminAuth, (req, res) => {
+    const payouts = load('payouts.json');
+    payouts.push({ id: 'pay_' + Date.now(), userId: parseInt(req.body.userId), amount: parseFloat(req.body.amount), status: req.body.status, created: new Date().toISOString() });
+    save('payouts.json', payouts);
+    res.redirect('/admin');
+});
+
+app.post('/admin/delete-link', adminAuth, (req, res) => {
+    let links = load('links.json');
+    links = links.filter(l => l.id !== req.body.id);
+    save('links.json', links);
+    res.redirect('/admin');
+});
+
+app.post('/admin/assign-manager', adminAuth, (req, res) => {
+    const users = load('users.json');
+    const u = users.find(u => u.id == req.body.userId);
+    if (u) {
+        u.manager_name = req.body.manager_name;
+        u.manager_telegram = req.body.manager_telegram;
+        u.manager_email = req.body.manager_email;
+        save('users.json', users);
+    }
+    res.redirect('/admin');
+});
+
+app.post('/admin/add-stats', adminAuth, (req, res) => {
+    const clicks = load('clicks.json');
+    const links = load('links.json').filter(l => l.userId == req.body.userId);
+    const link = links[0];
+    if (link) {
+        const numClicks = parseInt(req.body.clicks) || 0;
+        const numConv = parseInt(req.body.conversions) || 0;
+        const revenue = parseFloat(req.body.revenue) || 0;
+        for (let i = 0; i < numClicks; i++) {
+            clicks.push({ id: 'clk_' + Date.now() + i, linkId: link.id, userId: parseInt(req.body.userId), country: req.body.country || 'US', timestamp: new Date().toISOString(), revenue: i < numConv ? (revenue / numConv) : 0, converted: i < numConv });
+        }
+        save('clicks.json', clicks);
+    }
     res.redirect('/admin');
 });
 
