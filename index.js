@@ -245,10 +245,16 @@ app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 // Auth middleware
 async function auth(req, res, next) {
-    if (!req.session.user) return res.redirect('/login');
-    const users = await load('users.json');
-    req.user = users.find(u => u.id === req.session.user.id) || req.session.user;
-    next();
+    if (!req.session || !req.session.user) return res.redirect('/login');
+    try {
+        const users = await load('users.json');
+        req.user = users.find(u => u.id === req.session.user.id) || req.session.user;
+        if (!req.user) return res.redirect('/login');
+        next();
+    } catch (e) {
+        console.error('Auth error:', e.message);
+        res.redirect('/login');
+    }
 }
 
 app.get('/dashboard', auth, async (req, res) => {
