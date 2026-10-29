@@ -24,7 +24,7 @@ async function initDB() {
     if (!DB.user || !DB.database) return;
     try {
         db = await mysql.createConnection(DB);
-        await db.execute(`CREATE TABLE IF NOT EXISTS store (id VARCHAR(50) PRIMARY KEY, data LONGTEXT)`);
+        await db.execute(`CREATE TABLE IF NOT EXISTS data_store (id VARCHAR(50) PRIMARY KEY, data LONGTEXT)`);
         useDB = true;
         console.log('DB connected');
     } catch (e) {
