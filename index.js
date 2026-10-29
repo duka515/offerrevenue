@@ -19,9 +19,9 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(session({
     secret: 'offerrevenue-secret-key-2026',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
+    resave: true,
+    saveUninitialized: true,
+    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, secure: false }
 }));
 app.use(express.static('public'));
 
@@ -165,11 +165,14 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res) => {
     const users = load('users.json');
-    const user = users.find(u => u.email === req.body.email && u.pass === hashPass(req.body.password));
+    const hashedInput = hashPass(req.body.password);
+    const user = users.find(u => u.email === req.body.email && u.pass === hashedInput);
     if (user) {
         req.session.user = user;
-        if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-        return res.redirect('/dashboard');
+        req.session.save(() => {
+            res.redirect('/dashboard');
+        });
+        return;
     }
     res.redirect('/login?error=1');
 });
@@ -194,7 +197,9 @@ app.post('/signup', (req, res) => {
     users.push(user);
     save('users.json', users);
     req.session.user = user;
-    res.redirect('/dashboard');
+    req.session.save(() => {
+        res.redirect('/dashboard');
+    });
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
