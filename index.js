@@ -104,7 +104,7 @@ function layout(title, content, user = null, page = '') {
             ${user.isAdmin ? '<a href="/admin">Admin Panel</a>' : ''}
         </div>` : '';
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} – OfferRevenue</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body><div style="max-width:1100px;margin:0 auto;padding:24px;">
-        ${user ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><div class="logo">${logo}<h1 style="font-size:22px;margin:0;">OfferRevenue</h1></div><a href="/profile" class="btn btn-sm" style="background:var(--surface2);color:var(--text);">My Profile</a></div>${nav}` : ''}
+        ${user ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><div class="logo">${logo}<h1 style="font-size:22px;margin:0;">OfferRevenue</h1></div><a href="/profile" class="btn btn-sm" style="background:var(--surface2);color:var(--text);">My Profile</a></div>${nav}` : `<div style="text-align:center;margin-bottom:20px;">${logo}<h1 style="font-size:22px;display:inline;margin-left:12px;">OfferRevenue</h1></div>`}
         ${content}
         <div class="footer"><div style="margin-bottom:8px;">OfferRevenue © 2026 All Rights Reserved</div><a href="/about">About Us</a><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a></div>
     </div></body></html>`;
