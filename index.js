@@ -176,7 +176,7 @@ function layout(title, content, user = null, page = '') {
 
 // Routes
 app.get('/', (req, res) => {
-    if (req.session.user) return res.redirect('/dashboard');
+    if (req.session && req.session.user) return res.redirect('/dashboard');
     const content = `
         <div style="text-align:center;padding:60px 20px;">${logo.replace('40','100').replace('40','100')}
             <h1 style="font-size:42px;margin:20px 0 12px;">OfferRevenue</h1>
@@ -222,7 +222,7 @@ app.post('/login', async (req, res) => {
 });
 
 app.get('/signup', (req, res) => {
-    if (req.session.user) return res.redirect('/dashboard');
+    if (req.session && req.session.user) return res.redirect('/dashboard');
     const err = req.query.error ? `<div style="color:var(--danger);margin-bottom:12px;text-align:center;">${req.query.error}</div>` : '';
     const countryOpts = countries.map(c => `<option value="${c}">${c}</option>`).join('');
     const content = `<div style="max-width:420px;margin:40px auto;"><div style="text-align:center;">${logo.replace('40','80').replace('40','80')}<h2 style="margin:16px 0;">Create Account</h2></div>
