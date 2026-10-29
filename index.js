@@ -397,11 +397,6 @@ app.post('/admin/login', async (req, res) => {
     }
     res.redirect('/admin/login?error=1');
 });
-        req.session.admin = true;
-        return res.redirect('/admin');
-    }
-    res.redirect('/admin/login?error=1');
-});
 
 app.get('/admin', adminAuth, async (req, res) => {
     const users = await load('users.json');
