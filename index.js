@@ -58,7 +58,7 @@ async function load(file) {
     try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return []; }
 }
 
-async function await save(file, data) {
+async function save(file, data) {
     const key = file.replace('.json', '');
     if (useDB && db) {
         try {
@@ -76,19 +76,21 @@ async function loadSettings() {
 }
 
 async function saveSettings(s) {
-    await await save('settings.json', s);
+    await save('settings.json', s);
 }
 
 // Init default offers
-let offers = await load('offers.json');
-if (!offers.length) {
-    offers = [
-        { id: 1, name: 'Dating App Premium', vertical: 'Dating', payout: 12.50, geo: 'US, UK, CA, AU', type: 'CPA', active: false },
-        { id: 2, name: 'Weight Loss Supplement', vertical: 'Nutra', payout: 45.00, geo: 'US, DE, FR', type: 'CPL', active: false },
-        { id: 7, name: 'Livecammate', vertical: 'Cam', payout: 20.00, geo: 'US, UK, CA, AU, EU', type: 'PPS', active: true, about: '' }
-    ];
-    await save('offers.json', offers);
-}
+(async () => {
+    let offers = await load('offers.json');
+    if (!offers.length) {
+        offers = [
+            { id: 1, name: 'Dating App Premium', vertical: 'Dating', payout: 12.50, geo: 'US, UK, CA, AU', type: 'CPA', active: false },
+            { id: 2, name: 'Weight Loss Supplement', vertical: 'Nutra', payout: 45.00, geo: 'US, DE, FR', type: 'CPL', active: false },
+            { id: 7, name: 'Livecammate', vertical: 'Cam', payout: 20.00, geo: 'US, UK, CA, AU, EU', type: 'PPS', active: true, about: '' }
+        ];
+        await save('offers.json', offers);
+    }
+})();
 
 // Hash password
 function hashPass(pass) {
@@ -205,7 +207,7 @@ app.post('/login', async (req, res) => {
     const user = users.find(u => u.email === req.body.email && u.pass === hashedInput);
     if (user) {
         req.session.user = user;
-        req.session.await save(() => {
+        req.session.save(() => {
             res.redirect('/dashboard');
         });
         return;
@@ -233,7 +235,7 @@ app.post('/signup', async (req, res) => {
     users.push(user);
     await save('users.json', users);
     req.session.user = user;
-    req.session.await save(() => {
+    req.session.save(() => {
         res.redirect('/dashboard');
     });
 });
@@ -241,7 +243,7 @@ app.post('/signup', async (req, res) => {
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 // Auth middleware
-function auth(req, res, next) {
+async function auth(req, res, next) {
     if (!req.session.user) return res.redirect('/login');
     const users = await load('users.json');
     req.user = users.find(u => u.id === req.session.user.id) || req.session.user;
