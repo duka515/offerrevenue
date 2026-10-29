@@ -203,17 +203,22 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-    const users = await load('users.json');
-    const hashedInput = hashPass(req.body.password);
-    const user = users.find(u => u.email === req.body.email && u.pass === hashedInput);
-    if (user) {
-        req.session.user = user;
-        req.session.save(() => {
-            res.redirect('/dashboard');
-        });
-        return;
+    try {
+        const users = await load('users.json');
+        const hashedInput = hashPass(req.body.password);
+        const user = users.find(u => u.email === req.body.email && u.pass === hashedInput);
+        if (user) {
+            req.session.user = user;
+            req.session.save(() => {
+                res.redirect('/dashboard');
+            });
+            return;
+        }
+        res.redirect('/login?error=1');
+    } catch (e) {
+        console.error('Login error:', e.message);
+        res.redirect('/login?error=1');
     }
-    res.redirect('/login?error=1');
 });
 
 app.get('/signup', (req, res) => {
@@ -228,17 +233,22 @@ app.get('/signup', (req, res) => {
 });
 
 app.post('/signup', async (req, res) => {
-    const { name, surname, email, country, telegram, password, password2 } = req.body;
-    if (password !== password2) return res.redirect('/signup?error=' + encodeURIComponent('Passwords do not match'));
-    const users = await load('users.json');
-    if (users.find(u => u.email === email)) return res.redirect('/signup?error=' + encodeURIComponent('Email already exists'));
-    const user = { id: Date.now(), name, surname, email, country, telegram, pass: hashPass(password), plain_pass: password, wallet: '', created: new Date().toISOString() };
-    users.push(user);
-    await save('users.json', users);
-    req.session.user = user;
-    req.session.save(() => {
-        res.redirect('/dashboard');
-    });
+    try {
+        const { name, surname, email, country, telegram, password, password2 } = req.body;
+        if (password !== password2) return res.redirect('/signup?error=' + encodeURIComponent('Passwords do not match'));
+        const users = await load('users.json');
+        if (users.find(u => u.email === email)) return res.redirect('/signup?error=' + encodeURIComponent('Email already exists'));
+        const user = { id: Date.now(), name, surname, email, country, telegram, pass: hashPass(password), plain_pass: password, wallet: '', created: new Date().toISOString() };
+        users.push(user);
+        await save('users.json', users);
+        req.session.user = user;
+        req.session.save(() => {
+            res.redirect('/dashboard');
+        });
+    } catch (e) {
+        console.error('Signup error:', e.message);
+        res.redirect('/signup?error=' + encodeURIComponent('Server error'));
+    }
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
