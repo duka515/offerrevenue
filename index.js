@@ -77,17 +77,42 @@ input:focus, select:focus { outline:none; border-color:var(--accent); }
 .grid-3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
 .stat-value { font-size:32px; font-weight:700; color:var(--accent); }
 .stat-label { color:var(--text-dim); font-size:13px; text-transform:uppercase; margin-bottom:8px; }
-table { width:100%; border-collapse:collapse; }
+table { width:100%; border-collapse:collapse; overflow-x:auto; display:block; }
 th, td { padding:14px 12px; text-align:left; border-bottom:1px solid var(--border); }
 th { color:var(--text-dim); font-weight:500; font-size:12px; text-transform:uppercase; }
-.nav { display:flex; gap:6px; margin-bottom:24px; background:var(--surface); padding:8px; border-radius:16px; border:1px solid var(--border); flex-wrap:wrap; }
-.nav a { color:var(--text-dim); text-decoration:none; padding:10px 16px; border-radius:10px; font-weight:500; }
+.nav { display:flex; gap:6px; margin-bottom:24px; background:var(--surface); padding:8px; border-radius:16px; border:1px solid var(--border); flex-wrap:wrap; justify-content:center; }
+.nav a { color:var(--text-dim); text-decoration:none; padding:10px 16px; border-radius:10px; font-weight:500; white-space:nowrap; }
 .nav a.active { background:linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color:#fff; }
 .nav a:hover:not(.active) { background:var(--surface2); color:var(--text); }
 .footer { text-align:center; padding:30px 20px; margin-top:40px; border-top:1px solid var(--border); font-size:13px; color:var(--text-dim); }
 .footer a { color:var(--text-dim); margin:0 12px; text-decoration:none; }
 .logo { display:flex; align-items:center; gap:12px; }
-@media (max-width:768px) { .nav a { padding:8px 12px; font-size:13px; } .grid-3 { grid-template-columns:1fr; } }
+.header-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.dashboard-grid { display:grid; grid-template-columns:1fr 300px; gap:20px; }
+.stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media (max-width:900px) {
+  .dashboard-grid { grid-template-columns:1fr; }
+  .stat-row { grid-template-columns:1fr; }
+}
+@media (max-width:768px) {
+  .nav { gap:4px; padding:6px; }
+  .nav a { padding:8px 10px; font-size:13px; }
+  .grid-3 { grid-template-columns:1fr; }
+  .card { padding:16px; }
+  .stat-value { font-size:24px; }
+  .header-row { flex-direction:column; text-align:center; }
+  .header-row .btn { width:100%; }
+  table { font-size:13px; }
+  th, td { padding:10px 8px; }
+  h1 { font-size:20px; }
+  .footer a { display:block; margin:8px 0; }
+}
+@media (max-width:480px) {
+  body { font-size:14px; }
+  .nav a { padding:6px 8px; font-size:12px; }
+  .btn { padding:10px 16px; }
+  .card { padding:12px; }
+}
 `;
 
 const logo = `<svg width="40" height="40" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#D4AF37"/><circle cx="50" cy="50" r="38" fill="#ffffff"/><text x="50" y="62" text-anchor="middle" font-size="42" font-weight="700" fill="#22c55e" font-family="Arial">$</text></svg>`;
@@ -104,7 +129,7 @@ function layout(title, content, user = null, page = '') {
             ${user.isAdmin ? '<a href="/admin">Admin Panel</a>' : ''}
         </div>` : '';
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} – OfferRevenue</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body><div style="max-width:1100px;margin:0 auto;padding:24px;">
-        ${user ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><div class="logo">${logo}<h1 style="font-size:22px;margin:0;">OfferRevenue</h1></div><a href="/profile" class="btn btn-sm" style="background:var(--surface2);color:var(--text);">My Profile</a></div>${nav}` : `<div style="text-align:center;margin-bottom:20px;">${logo}<h1 style="font-size:22px;display:inline;margin-left:12px;">OfferRevenue</h1></div>`}
+        ${user ? `<div class="header-row"><div class="logo">${logo}<h1 style="font-size:22px;margin:0;">OfferRevenue</h1></div><a href="/profile" class="btn btn-sm" style="background:var(--surface2);color:var(--text);">My Profile</a></div>${nav}` : `<div style="text-align:center;margin-bottom:20px;">${logo}<h1 style="font-size:22px;display:inline;margin-left:12px;">OfferRevenue</h1></div>`}
         ${content}
         <div class="footer"><div style="margin-bottom:8px;">OfferRevenue © 2026 All Rights Reserved</div><a href="/about">About Us</a><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a></div>
     </div></body></html>`;
@@ -190,8 +215,8 @@ app.get('/dashboard', auth, (req, res) => {
     const todayRevenue = todayClicks.reduce((s, c) => s + (c.revenue || 0), 0);
     const todayConv = todayClicks.filter(c => c.converted).length;
     const manager = req.user.manager_name || 'Support';
-    const content = `<div style="display:grid;grid-template-columns:1fr 300px;gap:20px;"><div>
-        <div class="grid-3"><div class="card" style="text-align:center;"><div class="stat-label">Clicks Today</div><div class="stat-value">${todayClicks.length}</div></div><div class="card" style="text-align:center;"><div class="stat-label">Conversions Today</div><div class="stat-value">${todayConv}</div></div><div class="card" style="text-align:center;"><div class="stat-label">Revenue Today</div><div class="stat-value">$${todayRevenue.toFixed(2)}</div></div></div>
+    const content = `<div class="dashboard-grid"><div>
+        <div class="stat-row"><div class="card" style="text-align:center;"><div class="stat-label">Clicks Today</div><div class="stat-value">${todayClicks.length}</div></div><div class="card" style="text-align:center;"><div class="stat-label">Conversions Today</div><div class="stat-value">${todayConv}</div></div><div class="card" style="text-align:center;"><div class="stat-label">Revenue Today</div><div class="stat-value">$${todayRevenue.toFixed(2)}</div></div></div>
         <div class="card"><h3 style="margin-bottom:16px;">Today's Statistics</h3><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);"><span>Payout</span><span style="color:var(--accent);">$${todayRevenue.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);"><span>Clicks</span><span>${todayClicks.length}</span></div><div style="display:flex;justify-content:space-between;padding:8px 0;"><span>Conversions</span><span>${todayConv}</span></div></div>
     </div><div class="card" style="text-align:center;"><div style="margin:0 auto 12px;width:80px;height:80px;">${logo.replace('40','80').replace('40','80')}</div><div style="font-weight:600;font-size:18px;">${manager}</div><div style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">Your Affiliate Manager</div>${req.user.manager_telegram ? `<a href="https://t.me/${req.user.manager_telegram.replace('@','')}" target="_blank" style="color:var(--accent);">${req.user.manager_telegram}</a>` : ''}</div></div>`;
     res.send(layout('Dashboard', content, req.user, 'dashboard'));
