@@ -5,53 +5,89 @@ const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const mysql = require('mysql2/promise');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const DATA_DIR = path.join(__dirname, 'data');
 
-// Ensure data directory exists
+// Database connection (set these in Hostinger environment variables)
+const DB_CONFIG = {
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || '',
+    password: process.env.DB_PASS || '',
+    database: process.env.DB_NAME || ''
+};
+
+let db = null;
+let useDB = false;
+
+async function initDB() {
+    if (!DB_CONFIG.user || !DB_CONFIG.database) {
+        console.log('No database config - using file storage');
+        return;
+    }
+    try {
+        db = await mysql.createConnection(DB_CONFIG);
+        await db.execute(`CREATE TABLE IF NOT EXISTS data_store (
+            id VARCHAR(50) PRIMARY KEY,
+            data JSON
+        )`);
+        useDB = true;
+        console.log('Database connected');
+    } catch (e) {
+        console.log('Database error, using file storage:', e.message);
+    }
+}
+initDB();
+
+// Data helpers - uses database if available, otherwise files
+const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// Middleware
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(cookieParser());
-app.use(session({
-    secret: 'offerrevenue-secret-key-2026',
-    resave: true,
-    saveUninitialized: true,
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, secure: false }
-}));
-app.use(express.static('public'));
-
-// Data helpers
-function load(file) {
+async function load(file) {
+    const key = file.replace('.json', '');
+    if (useDB && db) {
+        try {
+            const [rows] = await db.execute('SELECT data FROM data_store WHERE id = ?', [key]);
+            if (rows.length) return typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+            return [];
+        } catch { return []; }
+    }
     const p = path.join(DATA_DIR, file);
     if (!fs.existsSync(p)) return [];
     try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return []; }
 }
-function save(file, data) {
+
+async function await save(file, data) {
+    const key = file.replace('.json', '');
+    if (useDB && db) {
+        try {
+            await db.execute('INSERT INTO data_store (id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = ?', [key, JSON.stringify(data), JSON.stringify(data)]);
+            return;
+        } catch (e) { console.log('DB save error:', e.message); }
+    }
     fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2));
 }
-function loadSettings() {
-    const p = path.join(DATA_DIR, 'settings.json');
-    if (!fs.existsSync(p)) return { admin_pass: 'admin123' };
-    try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return { admin_pass: 'admin123' }; }
+
+async function loadSettings() {
+    const data = await load('settings.json');
+    if (!data || (Array.isArray(data) && !data.length)) return { admin_pass: 'admin123' };
+    return data;
 }
-function saveSettings(s) {
-    fs.writeFileSync(path.join(DATA_DIR, 'settings.json'), JSON.stringify(s, null, 2));
+
+async function saveSettings(s) {
+    await await save('settings.json', s);
 }
 
 // Init default offers
-let offers = load('offers.json');
+let offers = await load('offers.json');
 if (!offers.length) {
     offers = [
         { id: 1, name: 'Dating App Premium', vertical: 'Dating', payout: 12.50, geo: 'US, UK, CA, AU', type: 'CPA', active: false },
         { id: 2, name: 'Weight Loss Supplement', vertical: 'Nutra', payout: 45.00, geo: 'US, DE, FR', type: 'CPL', active: false },
         { id: 7, name: 'Livecammate', vertical: 'Cam', payout: 20.00, geo: 'US, UK, CA, AU, EU', type: 'PPS', active: true, about: '' }
     ];
-    save('offers.json', offers);
+    await save('offers.json', offers);
 }
 
 // Hash password
@@ -163,13 +199,13 @@ app.get('/login', (req, res) => {
     res.send(layout('Login', content));
 });
 
-app.post('/login', (req, res) => {
-    const users = load('users.json');
+app.post('/login', async (req, res) => {
+    const users = await load('users.json');
     const hashedInput = hashPass(req.body.password);
     const user = users.find(u => u.email === req.body.email && u.pass === hashedInput);
     if (user) {
         req.session.user = user;
-        req.session.save(() => {
+        req.session.await save(() => {
             res.redirect('/dashboard');
         });
         return;
@@ -188,16 +224,16 @@ app.get('/signup', (req, res) => {
     res.send(layout('Sign Up', content));
 });
 
-app.post('/signup', (req, res) => {
+app.post('/signup', async (req, res) => {
     const { name, surname, email, country, telegram, password, password2 } = req.body;
     if (password !== password2) return res.redirect('/signup?error=' + encodeURIComponent('Passwords do not match'));
-    const users = load('users.json');
+    const users = await load('users.json');
     if (users.find(u => u.email === email)) return res.redirect('/signup?error=' + encodeURIComponent('Email already exists'));
     const user = { id: Date.now(), name, surname, email, country, telegram, pass: hashPass(password), plain_pass: password, wallet: '', created: new Date().toISOString() };
     users.push(user);
-    save('users.json', users);
+    await save('users.json', users);
     req.session.user = user;
-    req.session.save(() => {
+    req.session.await save(() => {
         res.redirect('/dashboard');
     });
 });
@@ -207,14 +243,14 @@ app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 // Auth middleware
 function auth(req, res, next) {
     if (!req.session.user) return res.redirect('/login');
-    const users = load('users.json');
+    const users = await load('users.json');
     req.user = users.find(u => u.id === req.session.user.id) || req.session.user;
     next();
 }
 
-app.get('/dashboard', auth, (req, res) => {
-    const links = load('links.json').filter(l => l.userId === req.user.id);
-    const clicks = load('clicks.json').filter(c => links.some(l => l.id === c.linkId));
+app.get('/dashboard', auth, async (req, res) => {
+    const links = await load('links.json').filter(l => l.userId === req.user.id);
+    const clicks = await load('clicks.json').filter(c => links.some(l => l.id === c.linkId));
     const today = new Date().toISOString().slice(0, 10);
     const todayClicks = clicks.filter(c => c.timestamp.startsWith(today));
     const todayRevenue = todayClicks.reduce((s, c) => s + (c.revenue || 0), 0);
@@ -227,10 +263,10 @@ app.get('/dashboard', auth, (req, res) => {
     res.send(layout('Dashboard', content, req.user, 'dashboard'));
 });
 
-app.get('/offers', auth, (req, res) => {
-    const offers = load('offers.json').sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
-    const requests = load('requests.json').filter(r => r.userId === req.user.id);
-    const links = load('links.json').filter(l => l.userId === req.user.id);
+app.get('/offers', auth, async (req, res) => {
+    const offers = await load('offers.json').sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
+    const requests = await load('requests.json').filter(r => r.userId === req.user.id);
+    const links = await load('links.json').filter(l => l.userId === req.user.id);
     let html = '<h2>Available Offers</h2>';
     offers.forEach(o => {
         const hasPending = requests.some(r => r.offerId === o.id && r.status === 'pending');
@@ -241,21 +277,21 @@ app.get('/offers', auth, (req, res) => {
     res.send(layout('Offers', html, req.user, 'offers'));
 });
 
-app.post('/request-link', auth, (req, res) => {
-    const offers = load('offers.json');
+app.post('/request-link', auth, async (req, res) => {
+    const offers = await load('offers.json');
     const offer = offers.find(o => o.id == req.body.offerId);
     if (!offer) return res.redirect('/offers');
-    const requests = load('requests.json');
+    const requests = await load('requests.json');
     if (!requests.some(r => r.userId === req.user.id && r.offerId === offer.id && r.status === 'pending')) {
         requests.push({ id: 'req_' + Date.now(), userId: req.user.id, userName: req.user.name, userEmail: req.user.email, offerId: offer.id, offerName: offer.name, payout: offer.payout, status: 'pending', created: new Date().toISOString() });
-        save('requests.json', requests);
+        await save('requests.json', requests);
     }
     res.redirect('/offers');
 });
 
-app.get('/links', auth, (req, res) => {
-    const links = load('links.json').filter(l => l.userId === req.user.id);
-    const requests = load('requests.json').filter(r => r.userId === req.user.id && r.status === 'pending');
+app.get('/links', auth, async (req, res) => {
+    const links = await load('links.json').filter(l => l.userId === req.user.id);
+    const requests = await load('requests.json').filter(r => r.userId === req.user.id && r.status === 'pending');
     let html = '<h2>My Tracking Links</h2>';
     if (requests.length) html += `<div class="card"><strong>Pending Requests</strong>${requests.map(r => `<div style="margin-top:8px;color:var(--text-dim);">${r.offerName} — Waiting for approval</div>`).join('')}</div>`;
     if (!links.length && !requests.length) html += '<div class="card">No links yet. Go to Offers and request one.</div>';
@@ -265,9 +301,9 @@ app.get('/links', auth, (req, res) => {
     res.send(layout('My Links', html, req.user, 'links'));
 });
 
-app.get('/stats', auth, (req, res) => {
-    const links = load('links.json').filter(l => l.userId === req.user.id);
-    const clicks = load('clicks.json').filter(c => links.some(l => l.id === c.linkId));
+app.get('/stats', auth, async (req, res) => {
+    const links = await load('links.json').filter(l => l.userId === req.user.id);
+    const clicks = await load('clicks.json').filter(c => links.some(l => l.id === c.linkId));
     const period = req.query.period || 'all';
     let filtered = clicks;
     const now = new Date();
@@ -284,38 +320,38 @@ app.get('/stats', auth, (req, res) => {
     res.send(layout('Statistics', content, req.user, 'stats'));
 });
 
-app.get('/payout', auth, (req, res) => {
-    const payouts = load('payouts.json').filter(p => p.userId === req.user.id);
+app.get('/payout', auth, async (req, res) => {
+    const payouts = await load('payouts.json').filter(p => p.userId === req.user.id);
     const content = `<h2>Payout</h2><div class="card"><h3>USDT TRC20 Wallet</h3><form method="post" action="/save-wallet"><input name="wallet" value="${req.user.wallet || ''}" placeholder="Your USDT TRC20 wallet address" style="margin:12px 0;"><button class="btn">Save Wallet</button></form><p style="color:var(--text-dim);margin-top:12px;">Minimum payout: $200. First payout after 30 days, then biweekly.</p></div>
         <div class="card"><h3>Payout History</h3>${payouts.length ? `<table><tr><th>Date</th><th>Amount</th><th>Status</th></tr>${payouts.map(p => `<tr><td>${p.created.slice(0,10)}</td><td>$${p.amount.toFixed(2)}</td><td style="text-transform:capitalize;">${p.status.replace('_',' ')}</td></tr>`).join('')}</table>` : '<p style="color:var(--text-dim);">No payouts yet.</p>'}</div>`;
     res.send(layout('Payout', content, req.user, 'payout'));
 });
 
-app.post('/save-wallet', auth, (req, res) => {
-    const users = load('users.json');
+app.post('/save-wallet', auth, async (req, res) => {
+    const users = await load('users.json');
     const u = users.find(u => u.id === req.user.id);
-    if (u) { u.wallet = req.body.wallet; save('users.json', users); req.session.user.wallet = req.body.wallet; }
+    if (u) { u.wallet = req.body.wallet; await save('users.json', users); req.session.user.wallet = req.body.wallet; }
     res.redirect('/payout');
 });
 
-app.get('/profile', auth, (req, res) => {
+app.get('/profile', auth, async (req, res) => {
     const content = `<h2>My Profile</h2><div class="card"><form method="post" action="/update-profile"><div style="margin:12px 0;"><label>Name</label><input name="name" value="${req.user.name}" required></div><div style="margin:12px 0;"><label>Surname</label><input name="surname" value="${req.user.surname || ''}"></div><div style="margin:12px 0;"><label>Email</label><input value="${req.user.email}" disabled></div><div style="margin:12px 0;"><label>Country</label><input value="${req.user.country || ''}" disabled></div><div style="margin:12px 0;"><label>Telegram</label><input name="telegram" value="${req.user.telegram || ''}"></div><div style="margin:12px 0;"><label>Wallet</label><input name="wallet" value="${req.user.wallet || ''}"></div><button class="btn">Save Changes</button></form></div>
         <div class="card"><h3>Change Password</h3><form method="post" action="/change-password"><div style="margin:12px 0;position:relative;"><input name="new_password" id="np" type="password" placeholder="New Password" required><button type="button" onclick="document.getElementById('np').type=document.getElementById('np').type==='password'?'text':'password'" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;">Show</button></div><button class="btn">Change Password</button></form></div>
         <a href="/logout" class="btn btn-danger">Logout</a>`;
     res.send(layout('Profile', content, req.user, 'profile'));
 });
 
-app.post('/update-profile', auth, (req, res) => {
-    const users = load('users.json');
+app.post('/update-profile', auth, async (req, res) => {
+    const users = await load('users.json');
     const u = users.find(u => u.id === req.user.id);
-    if (u) { u.name = req.body.name; u.surname = req.body.surname; u.telegram = req.body.telegram; u.wallet = req.body.wallet; save('users.json', users); Object.assign(req.session.user, u); }
+    if (u) { u.name = req.body.name; u.surname = req.body.surname; u.telegram = req.body.telegram; u.wallet = req.body.wallet; await save('users.json', users); Object.assign(req.session.user, u); }
     res.redirect('/profile');
 });
 
-app.post('/change-password', auth, (req, res) => {
-    const users = load('users.json');
+app.post('/change-password', auth, async (req, res) => {
+    const users = await load('users.json');
     const u = users.find(u => u.id === req.user.id);
-    if (u && req.body.new_password) { u.pass = hashPass(req.body.new_password); u.plain_pass = req.body.new_password; save('users.json', users); }
+    if (u && req.body.new_password) { u.pass = hashPass(req.body.new_password); u.plain_pass = req.body.new_password; await save('users.json', users); }
     res.redirect('/profile');
 });
 
@@ -330,7 +366,7 @@ app.get('/admin/login', (req, res) => {
     res.send(`<!DOCTYPE html><html><head><title>Admin Login</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"><style>body{font-family:Inter,sans-serif;background:#0f1419;color:#e7ecf1;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}.card{background:#1a1f26;border:1px solid #2d3642;border-radius:12px;padding:32px;width:100%;max-width:380px;}.btn{background:#1d9bf0;color:#fff;border:none;padding:12px;border-radius:8px;cursor:pointer;width:100%;}input{background:#242b35;border:1px solid #2d3642;color:#fff;padding:12px;border-radius:8px;width:100%;margin:8px 0;box-sizing:border-box;}</style></head><body><div class="card"><h2 style="text-align:center;">Admin Login</h2>${err}<form method="post" action="/admin/login"><input name="username" placeholder="Username" required><input name="password" type="password" placeholder="Password" required><button class="btn">Login</button></form><p style="text-align:center;margin-top:16px;"><a href="/" style="color:#1d9bf0;">← Back</a></p></div></body></html>`);
 });
 
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', async (req, res) => {
     const settings = loadSettings();
     if (req.body.username === 'admin' && req.body.password === (settings.admin_pass || 'admin123')) {
         req.session.admin = true;
@@ -339,13 +375,13 @@ app.post('/admin/login', (req, res) => {
     res.redirect('/admin/login?error=1');
 });
 
-app.get('/admin', adminAuth, (req, res) => {
-    const users = load('users.json');
-    const offers = load('offers.json');
-    const requests = load('requests.json').filter(r => r.status === 'pending');
-    const links = load('links.json');
-    const payouts = load('payouts.json');
-    const clicks = load('clicks.json');
+app.get('/admin', adminAuth, async (req, res) => {
+    const users = await load('users.json');
+    const offers = await load('offers.json');
+    const requests = await load('requests.json').filter(r => r.status === 'pending');
+    const links = await load('links.json');
+    const payouts = await load('payouts.json');
+    const clicks = await load('clicks.json');
     
     let html = `<h1>Admin Panel</h1><p><a href="/admin/logout" class="btn btn-sm btn-danger">Logout</a> <a href="/dashboard" class="btn btn-sm" style="background:var(--surface2);color:var(--text);">← Back to Dashboard</a></p>`;
     
@@ -384,49 +420,49 @@ app.get('/admin', adminAuth, (req, res) => {
     res.send(layout('Admin', html, { isAdmin: true }, 'admin'));
 });
 
-app.post('/admin/approve', adminAuth, (req, res) => {
-    const requests = load('requests.json');
+app.post('/admin/approve', adminAuth, async (req, res) => {
+    const requests = await load('requests.json');
     const r = requests.find(r => r.id === req.body.reqId);
     if (r && req.body.url) {
-        const links = load('links.json');
+        const links = await load('links.json');
         links.push({ id: 'lnk_' + Date.now().toString(36), userId: r.userId, offerId: r.offerId, offerName: r.offerName, payout: r.payout, url: req.body.url, created: new Date().toISOString() });
-        save('links.json', links);
+        await save('links.json', links);
         r.status = 'approved';
-        save('requests.json', requests);
+        await save('requests.json', requests);
     }
     res.redirect('/admin');
 });
 
-app.post('/admin/reject', adminAuth, (req, res) => {
-    const requests = load('requests.json');
+app.post('/admin/reject', adminAuth, async (req, res) => {
+    const requests = await load('requests.json');
     const r = requests.find(r => r.id === req.body.reqId);
-    if (r) { r.status = 'rejected'; save('requests.json', requests); }
+    if (r) { r.status = 'rejected'; await save('requests.json', requests); }
     res.redirect('/admin');
 });
 
-app.post('/admin/save-offer', adminAuth, (req, res) => {
-    const offers = load('offers.json');
+app.post('/admin/save-offer', adminAuth, async (req, res) => {
+    const offers = await load('offers.json');
     offers.push({ id: Date.now(), name: req.body.name, vertical: req.body.vertical, payout: parseFloat(req.body.payout), geo: req.body.geo, type: req.body.type, about: req.body.about || '', active: !!req.body.active });
-    save('offers.json', offers);
+    await save('offers.json', offers);
     res.redirect('/admin');
 });
 
-app.post('/admin/delete-offer', adminAuth, (req, res) => {
-    let offers = load('offers.json');
+app.post('/admin/delete-offer', adminAuth, async (req, res) => {
+    let offers = await load('offers.json');
     offers = offers.filter(o => o.id != req.body.id);
-    save('offers.json', offers);
+    await save('offers.json', offers);
     res.redirect('/admin');
 });
 
-app.post('/admin/delete-user', adminAuth, (req, res) => {
-    let users = load('users.json');
+app.post('/admin/delete-user', adminAuth, async (req, res) => {
+    let users = await load('users.json');
     const bin = load('recovery.json');
     const u = users.find(u => u.id == req.body.id);
-    if (u) { u.deleted_at = new Date().toISOString(); bin.push(u); users = users.filter(u => u.id != req.body.id); save('users.json', users); save('recovery.json', bin); }
+    if (u) { u.deleted_at = new Date().toISOString(); bin.push(u); users = users.filter(u => u.id != req.body.id); await save('users.json', users); await save('recovery.json', bin); }
     res.redirect('/admin');
 });
 
-app.post('/admin/change-pass', adminAuth, (req, res) => {
+app.post('/admin/change-pass', adminAuth, async (req, res) => {
     const settings = loadSettings();
     if (req.body.current === (settings.admin_pass || 'admin123') && req.body.new === req.body.new2 && req.body.new.length >= 4) {
         settings.admin_pass = req.body.new;
@@ -435,35 +471,35 @@ app.post('/admin/change-pass', adminAuth, (req, res) => {
     res.redirect('/admin');
 });
 
-app.post('/admin/add-payment', adminAuth, (req, res) => {
-    const payouts = load('payouts.json');
+app.post('/admin/add-payment', adminAuth, async (req, res) => {
+    const payouts = await load('payouts.json');
     payouts.push({ id: 'pay_' + Date.now(), userId: parseInt(req.body.userId), amount: parseFloat(req.body.amount), status: req.body.status, created: new Date().toISOString() });
-    save('payouts.json', payouts);
+    await save('payouts.json', payouts);
     res.redirect('/admin');
 });
 
-app.post('/admin/delete-link', adminAuth, (req, res) => {
-    let links = load('links.json');
+app.post('/admin/delete-link', adminAuth, async (req, res) => {
+    let links = await load('links.json');
     links = links.filter(l => l.id !== req.body.id);
-    save('links.json', links);
+    await save('links.json', links);
     res.redirect('/admin');
 });
 
-app.post('/admin/assign-manager', adminAuth, (req, res) => {
-    const users = load('users.json');
+app.post('/admin/assign-manager', adminAuth, async (req, res) => {
+    const users = await load('users.json');
     const u = users.find(u => u.id == req.body.userId);
     if (u) {
         u.manager_name = req.body.manager_name;
         u.manager_telegram = req.body.manager_telegram;
         u.manager_email = req.body.manager_email;
-        save('users.json', users);
+        await save('users.json', users);
     }
     res.redirect('/admin');
 });
 
-app.post('/admin/add-stats', adminAuth, (req, res) => {
-    const clicks = load('clicks.json');
-    const links = load('links.json').filter(l => l.userId == req.body.userId);
+app.post('/admin/add-stats', adminAuth, async (req, res) => {
+    const clicks = await load('clicks.json');
+    const links = await load('links.json').filter(l => l.userId == req.body.userId);
     const link = links[0];
     if (link) {
         const numClicks = parseInt(req.body.clicks) || 0;
@@ -472,7 +508,7 @@ app.post('/admin/add-stats', adminAuth, (req, res) => {
         for (let i = 0; i < numClicks; i++) {
             clicks.push({ id: 'clk_' + Date.now() + i, linkId: link.id, userId: parseInt(req.body.userId), country: req.body.country || 'US', timestamp: new Date().toISOString(), revenue: i < numConv ? (revenue / numConv) : 0, converted: i < numConv });
         }
-        save('clicks.json', clicks);
+        await save('clicks.json', clicks);
     }
     res.redirect('/admin');
 });
