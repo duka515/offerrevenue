@@ -288,8 +288,8 @@ async function auth(req, res, next) {
 }
 
 app.get('/dashboard', auth, async (req, res) => {
-    const links = await load('links.json').filter(l => l.userId === req.user.id);
-    const clicks = await load('clicks.json').filter(c => links.some(l => l.id === c.linkId));
+    const links = (await load('links.json')).filter(l => l.userId === req.user.id);
+    const clicks = (await load('clicks.json')).filter(c => links.some(l => l.id === c.linkId));
     const today = new Date().toISOString().slice(0, 10);
     const todayClicks = clicks.filter(c => c.timestamp.startsWith(today));
     const todayRevenue = todayClicks.reduce((s, c) => s + (c.revenue || 0), 0);
@@ -304,8 +304,8 @@ app.get('/dashboard', auth, async (req, res) => {
 
 app.get('/offers', auth, async (req, res) => {
     const offers = await load('offers.json').sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
-    const requests = await load('requests.json').filter(r => r.userId === req.user.id);
-    const links = await load('links.json').filter(l => l.userId === req.user.id);
+    const requests = (await load('requests.json')).filter(r => r.userId === req.user.id);
+    const links = (await load('links.json')).filter(l => l.userId === req.user.id);
     let html = '<h2>Available Offers</h2>';
     offers.forEach(o => {
         const hasPending = requests.some(r => r.offerId === o.id && r.status === 'pending');
@@ -329,8 +329,8 @@ app.post('/request-link', auth, async (req, res) => {
 });
 
 app.get('/links', auth, async (req, res) => {
-    const links = await load('links.json').filter(l => l.userId === req.user.id);
-    const requests = await load('requests.json').filter(r => r.userId === req.user.id && r.status === 'pending');
+    const links = (await load('links.json')).filter(l => l.userId === req.user.id);
+    const requests = (await load('requests.json')).filter(r => r.userId === req.user.id && r.status === 'pending');
     let html = '<h2>My Tracking Links</h2>';
     if (requests.length) html += `<div class="card"><strong>Pending Requests</strong>${requests.map(r => `<div style="margin-top:8px;color:var(--text-dim);">${r.offerName} — Waiting for approval</div>`).join('')}</div>`;
     if (!links.length && !requests.length) html += '<div class="card">No links yet. Go to Offers and request one.</div>';
@@ -341,8 +341,8 @@ app.get('/links', auth, async (req, res) => {
 });
 
 app.get('/stats', auth, async (req, res) => {
-    const links = await load('links.json').filter(l => l.userId === req.user.id);
-    const clicks = await load('clicks.json').filter(c => links.some(l => l.id === c.linkId));
+    const links = (await load('links.json')).filter(l => l.userId === req.user.id);
+    const clicks = (await load('clicks.json')).filter(c => links.some(l => l.id === c.linkId));
     const period = req.query.period || 'all';
     let filtered = clicks;
     const now = new Date();
@@ -360,7 +360,7 @@ app.get('/stats', auth, async (req, res) => {
 });
 
 app.get('/payout', auth, async (req, res) => {
-    const payouts = await load('payouts.json').filter(p => p.userId === req.user.id);
+    const payouts = (await load('payouts.json')).filter(p => p.userId === req.user.id);
     const content = `<h2>Payout</h2><div class="card"><h3>USDT TRC20 Wallet</h3><form method="post" action="/save-wallet"><input name="wallet" value="${req.user.wallet || ''}" placeholder="Your USDT TRC20 wallet address" style="margin:12px 0;"><button class="btn">Save Wallet</button></form><p style="color:var(--text-dim);margin-top:12px;">Minimum payout: $200. First payout after 30 days, then biweekly.</p></div>
         <div class="card"><h3>Payout History</h3>${payouts.length ? `<table><tr><th>Date</th><th>Amount</th><th>Status</th></tr>${payouts.map(p => `<tr><td>${p.created.slice(0,10)}</td><td>$${p.amount.toFixed(2)}</td><td style="text-transform:capitalize;">${p.status.replace('_',' ')}</td></tr>`).join('')}</table>` : '<p style="color:var(--text-dim);">No payouts yet.</p>'}</div>`;
     res.send(layout('Payout', content, req.user, 'payout'));
@@ -418,7 +418,7 @@ app.post('/admin/login', async (req, res) => {
 app.get('/admin', adminAuth, async (req, res) => {
     const users = await load('users.json');
     const offers = await load('offers.json');
-    const requests = await load('requests.json').filter(r => r.status === 'pending');
+    const requests = (await load('requests.json')).filter(r => r.status === 'pending');
     const links = await load('links.json');
     const payouts = await load('payouts.json');
     const clicks = await load('clicks.json');
@@ -539,7 +539,7 @@ app.post('/admin/assign-manager', adminAuth, async (req, res) => {
 
 app.post('/admin/add-stats', adminAuth, async (req, res) => {
     const clicks = await load('clicks.json');
-    const links = await load('links.json').filter(l => l.userId == req.body.userId);
+    const links = (await load('links.json')).filter(l => l.userId == req.body.userId);
     const link = links[0];
     if (link) {
         const numClicks = parseInt(req.body.clicks) || 0;
