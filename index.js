@@ -303,7 +303,7 @@ app.get('/dashboard', auth, async (req, res) => {
 });
 
 app.get('/offers', auth, async (req, res) => {
-    const offers = await load('offers.json').sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
+    const offers = (await load('offers.json')).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
     const requests = (await load('requests.json')).filter(r => r.userId === req.user.id);
     const links = (await load('links.json')).filter(l => l.userId === req.user.id);
     let html = '<h2>Available Offers</h2>';
