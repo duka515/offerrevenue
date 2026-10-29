@@ -41,6 +41,16 @@ async function initDB() {
 }
 initDB();
 
+// Middleware
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+app.use(session({
+    secret: 'offerrevenue-secret-key-2026',
+    resave: true,
+    saveUninitialized: true,
+    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, secure: false }
+}));
+
 // Data helpers - uses database if available, otherwise files
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
