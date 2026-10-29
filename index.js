@@ -222,8 +222,10 @@ app.get('/login', (req, res) => {
 app.post('/login', async (req, res) => {
     try {
         const users = await load('users.json');
+        const email = (req.body.email || '').toLowerCase().trim();
         const hashedInput = hashPass(req.body.password);
-        const user = users.find(u => u.email === req.body.email && u.pass === hashedInput);
+        console.log('Login attempt:', email, 'Users count:', users.length);
+        const user = users.find(u => u.email.toLowerCase() === email && u.pass === hashedInput);
         if (user) {
             req.session.user = user;
             req.session.save(() => {
@@ -231,6 +233,7 @@ app.post('/login', async (req, res) => {
             });
             return;
         }
+        console.log('Login failed for:', email);
         res.redirect('/login?error=1');
     } catch (e) {
         console.error('Login error:', e.message);
@@ -255,7 +258,7 @@ app.post('/signup', async (req, res) => {
         if (password !== password2) return res.redirect('/signup?error=' + encodeURIComponent('Passwords do not match'));
         const users = await load('users.json');
         if (users.find(u => u.email === email)) return res.redirect('/signup?error=' + encodeURIComponent('Email already exists'));
-        const user = { id: Date.now(), name, surname, email, country, telegram, pass: hashPass(password), plain_pass: password, wallet: '', created: new Date().toISOString() };
+        const user = { id: Date.now(), name, surname, email: email.toLowerCase().trim(), country, telegram, pass: hashPass(password), plain_pass: password, wallet: '', created: new Date().toISOString() };
         users.push(user);
         await save('users.json', users);
         req.session.user = user;
